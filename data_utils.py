@@ -118,9 +118,13 @@ def get_labels(ncf):
 
     # poly_type = info['POLY_TYPE'].values[poly_index]
     # concentration = info[['CT', 'CA', 'CB', 'CC']].values[poly_index]
-    concentration = info['CT'].values[poly_index]
+    lbl = np.zeros(poly_index.shape, dtype=np.int8)
+    for key, data in info.iterrows():
+        cls = int(data['CT'] > 2)
+        lbl[poly_index == key] = cls
+    # concentration = info['CT'].values[poly_index]
     # stage = info[['SA', 'SB', 'SC']].values[poly_index]
     # form = info[['FA', 'FB', 'FC']].values[poly_index]
 
     # return poly_type, concentration, stage, form
-    return concentration
+    return lbl

@@ -23,18 +23,18 @@ def build_dataset(name):
     else:
         raise ValueError(f"Can't build dataset called '{name}")
     nc_files = [str(path) for path in all_ncs if filter_fn(path)]
+    print(name, len(nc_files))
 
     data = tf.data.Dataset.from_tensor_slices(nc_files)
     data = data.map(lambda x: tf.numpy_function(load_tile, [x],
         [tf.float32, tf.float32, tf.int8]),
-        num_parallel_calls=AUTOTUNE,
+        num_parallel_calls=3,
     )
     data = data.interleave(flow_from_tensors,
-            cycle_length=3, deterministic=False,
-            num_parallel_calls=AUTOTUNE
+            cycle_length=3, deterministic=False, num_parallel_calls=3
     )
     if name == 'train':
-        data = data.shuffle(512)
+        data = data.shuffle(2048)
     #     data = data.repeat(64)
     #     data = data.map(augment)
     data = data.batch(BATCH_SIZE)

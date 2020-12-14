@@ -15,12 +15,14 @@ if __name__ == '__main__':
     loss = tf.keras.losses.BinaryCrossentropy(from_logits=True)
     metrics = [tf.keras.metrics.BinaryAccuracy(threshold=0)]
 
+    print('Compiling...')
     model.compile(
         optimizer=tf.keras.optimizers.Adam(),
         loss=loss,
         metrics=metrics,
     )
 
+    print('Training...')
     model.fit(train_data,
         epochs=10,
         callbacks=[tf.keras.callbacks.TensorBoard(log_dir=log_dir)]
