@@ -1,7 +1,6 @@
 import tensorflow as tf
 
-from tensorflow.keras import Model, Input
-from tensorflow.keras import layers
+from tensorflow.keras import Model, Input, Sequential, layers
 import tensorflow.keras.backend as K
 
 DEFAULTS = dict(
@@ -20,73 +19,98 @@ def ZoomNN(config={}):
 
     s1 = Input([256, 256, 2], name='input_s1')
     s2 = Input([256, 256, 2], name='input_s2')
-    s3 = Input([256, 256, 2], name='input_s3')
-    s4 = Input([256, 256, 2], name='input_s4')
-    s5 = Input([256, 256, 2], name='input_s5')
+    s3 = Input([256, 256, 2+14], name='input_s3')
+    s4 = Input([256, 256, 2+14], name='input_s4')
 
-    b4 = Input([256, 256, 14], name='input_b4')
-    b5 = Input([256, 256, 14], name='input_b5')
+    C = 32
 
     # Initialize feature maps
-    l1 = convrelu(s1, 32, batch_norm=False)
-    l2 = convrelu(s2, 32, batch_norm=False)
-    l3 = convrelu(s3, 32, batch_norm=False)
-    l4 = layers.Add()([
-        convrelu(s4, 32, batch_norm=False),
-        convrelu(b4, 32, batch_norm=False)
-    ])
-    l5 = layers.Add()([
-        convrelu(s5, 32, batch_norm=False),
-        convrelu(b5, 32, batch_norm=False)
-    ])
+    l1 = ConvReLU(C, batch_norm=False)(s1)
+    l2 = ConvReLU(C, batch_norm=False)(s2)
+    l3 = ConvReLU(C, batch_norm=False)(s3)
+    l4 = ConvReLU(C, batch_norm=False)(s4)
 
     # Initial Dense Blocks
-    x1 = ResidualDenseBlock(l1)
-    x2 = ResidualDenseBlock(l2)
-    x3 = ResidualDenseBlock(l3)
-    x4 = ResidualDenseBlock(l4)
-    x5 = ResidualDenseBlock(l5)
+    x1 = ResidualDenseBlock(C)(l1)
+    x2 = ResidualDenseBlock(C)(l2)
+    x3 = ResidualDenseBlock(C)(l3)
+    x4 = ResidualDenseBlock(C)(l4)
 
     # "Weaving" stage
-    x4 = layers.Add()([x4, CropAndUp()(x5)])
-    x4 = ResidualDenseBlock(x4)
+    x2 = layers.Add()([x2, DownAndPad()(x1)])
+    x2 = ResidualDenseBlock(C)(x2)
+
+    x3 = layers.Add()([x3, DownAndPad()(x2)])
+    x3 = ResidualDenseBlock(C)(x3)
+
+    # x4 = layers.Add()([x4, DownAndPad()(x3)])
+    # x4 = ResidualDenseBlock(C)(x4)
+
+    # x5 = layers.Add()([x5, DownAndPad()(x4)])
+    # x5 = ResidualDenseBlock(C)(x5)
+
+    # x4 = layers.Add()([x4, CropAndUp()(x5)])
+    # x4 = ResidualDenseBlock(C)(x4)
 
     x3 = layers.Add()([x3, CropAndUp()(x4)])
-    x3 = ResidualDenseBlock(x3)
+    x3 = ResidualDenseBlock(C)(x3)
 
     x2 = layers.Add()([x2, CropAndUp()(x3)])
-    x2 = ResidualDenseBlock(x2)
+    x2 = ResidualDenseBlock(C)(x2)
 
     x1 = layers.Add()([x1, CropAndUp()(x2)])
-    x1 = ResidualDenseBlock(x1)
+    x1 = ResidualDenseBlock(C)(x1)
 
     out = layers.Conv2D(1, 1)(x1)
 
-    return Model(inputs=[s1, s2, s3, s4, s5, b4, b5], outputs=[out])
+    return Model(inputs=[s1, s2, s3, s4], outputs=[out])
 
 
-def convrelu(x, c_out, batch_norm=True):
-    x = layers.Conv2D(c_out, 3, padding='same')(x)
-    if batch_norm:
-        x = layers.BatchNormalization()(x)
-    return layers.ReLU()(x)
+class ConvReLU(layers.Layer):
+    def __init__(self, c_out, batch_norm=True):
+        super().__init__()
+        self.conv = layers.Conv2D(c_out, 3, padding='same')
+        self.batch_norm = batch_norm
+        if batch_norm:
+            self.bn = layers.BatchNormalization()
+        self.relu = layers.PReLU()
+
+    def call(self, x):
+        x = self.conv(x)
+        if self.batch_norm:
+            x = self.bn(x)
+        x = self.relu(x)
+        return x
 
 
-def ResidualDenseBlock(x):
-    c_in = x.shape[-1]
-    skip = x
-    x = layers.BatchNormalization()(x)
-    x_new = convrelu(x, 8)
-    x = layers.Concatenate()([x, x_new])
-    x_new = convrelu(x, 8)
-    x = layers.Concatenate()([x, x_new])
-    x_new = convrelu(x, 8)
-    x = layers.Concatenate()([x, x_new])
-    x_new = convrelu(x, 8)
-    x = layers.Concatenate()([x, x_new])
+class ResidualDenseBlock(layers.Layer):
+    def __init__(self, channels):
+        super().__init__()
+        self.bn = layers.BatchNormalization()
+        self.cr1 = ConvReLU(8)
+        self.cr2 = ConvReLU(8)
+        self.cr3 = ConvReLU(8)
+        self.cr4 = ConvReLU(8)
 
-    x = layers.Conv2D(c_in, 1)(x)
-    return layers.Add()([skip, x])
+        self.final = layers.Conv2D(channels, 1)
+
+        self.cat = layers.Concatenate()
+        self.add = layers.Add()
+
+    def call(self, x):
+        skip = x
+        x = self.bn(x)
+        x_new = self.cr1(x)
+        x = self.cat([x, x_new])
+        x_new = self.cr2(x)
+        x = self.cat([x, x_new])
+        x_new = self.cr3(x)
+        x = self.cat([x, x_new])
+        x_new = self.cr4(x)
+        x = self.cat([x, x_new])
+
+        x = self.add([skip, self.final(x)])
+        return x
 
 
 class CropAndUp(layers.Layer):
@@ -98,3 +122,17 @@ class CropAndUp(layers.Layer):
         W = K.shape(x)[2]
         x = x[:,H//4:H-H//4,W//4:W-W//4]
         return K.resize_images(x, 2, 2, K.image_data_format(), interpolation='bilinear')
+
+
+class DownAndPad(layers.Layer):
+    def __init__(self):
+        super().__init__()
+        self.pool = layers.MaxPooling2D(2)
+
+    def call(self, x):
+        H = K.shape(x)[1]
+        W = K.shape(x)[2]
+
+        x = self.pool(x)
+        x = tf.pad(x, ((0, 0), (H // 4, H // 4), (W // 4, W // 4), (0, 0)))
+        return x

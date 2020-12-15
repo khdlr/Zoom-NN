@@ -4,7 +4,7 @@ import tensorflow as tf
 
 def get_stack(ncf, names):
     return np.stack([
-        np.array(ncf.variables.get(name))
+        np.array(ncf[name][:])
     for name in names], axis=-1)
 
 
@@ -116,15 +116,9 @@ def get_labels(ncf):
     id_2_idx = {v: i for i, v in enumerate(info.index)}
     poly_index = np.vectorize(id_2_idx.get)(poly_index)
 
-    # poly_type = info['POLY_TYPE'].values[poly_index]
-    # concentration = info[['CT', 'CA', 'CB', 'CC']].values[poly_index]
-    lbl = np.zeros(poly_index.shape, dtype=np.int8)
-    for key, data in info.iterrows():
-        cls = int(data['CT'] > 2)
-        lbl[poly_index == key] = cls
-    # concentration = info['CT'].values[poly_index]
-    # stage = info[['SA', 'SB', 'SC']].values[poly_index]
-    # form = info[['FA', 'FB', 'FC']].values[poly_index]
+    poly_type = info['POLY_TYPE'].values[poly_index].astype(np.int8)
+    concentration = info[['CT', 'CA', 'CB', 'CC']].values[poly_index].astype(np.int8)
+    stage = info[['SA', 'SB', 'SC']].values[poly_index].astype(np.int8)
+    form = info[['FA', 'FB', 'FC']].values[poly_index].astype(np.int8)
 
-    # return poly_type, concentration, stage, form
-    return lbl
+    return poly_type, concentration, stage, form
