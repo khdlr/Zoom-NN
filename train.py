@@ -4,17 +4,62 @@ from models.zoomnn import ZoomNN
 from models.unet import UNet
 import datetime
 
+
+def ignore_m1_bce(y_true, y_pred):
+    B = tf.shape(y_true)[0]
+    y_true = tf.reshape(y_true, (B, -1))
+    y_pred = tf.reshape(y_pred, (B, -1))
+    valid_value_mask = tf.math.not_equal(y_true, tf.constant(-1, tf.int8))
+
+    y_true = tf.cast(y_true, tf.float32)
+    bce = -tf.reduce_sum(tf.where(valid_value_mask,
+        # Then
+        y_true * tf.math.log_sigmoid(y_pred) +
+        (1 - y_true) * tf.math.log_sigmoid(-y_pred),
+        # Else
+        tf.constant(0, tf.float32)
+    ), axis=1)
+    valid = tf.reduce_sum(tf.cast(valid_value_mask, tf.float32), axis=1)
+
+    return bce / valid
+
+
+class BinaryAccuracyWithIgnore(tf.keras.metrics.Metric):
+    def __init__(self, name='accuracy', **kwargs):
+        super().__init__(name=name, **kwargs)
+        self.correct = self.add_weight(name='correct', initializer='zeros')
+        self.total = self.add_weight(name='total', initializer='zeros')
+
+    def update_state(self, y_true, y_pred, sample_weight=None):
+        valid = y_true != -1
+        y_true = tf.cast(y_true, tf.bool)
+        y_pred = tf.math.greater(y_pred, 0)
+        correct = tf.math.logical_and(tf.equal(y_true, y_pred), valid)
+
+        valid = tf.cast(valid, self.dtype)
+        correct = tf.cast(correct, self.dtype)
+        self.total.assign_add(tf.reduce_sum(valid))
+        self.correct.assign_add(tf.reduce_sum(correct))
+
+    def result(self):
+        return self.correct / self.total 
+
+    def reset_states(self):
+        self.correct.assign(0)
+        self.total.assign(0)
+
+
 if __name__ == '__main__':
     train_data = data_loading.build_dataset('train')
-    # val_data = data_loading.build_dataset('val')
+    val_data = data_loading.build_dataset('val')
 
     current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     log_dir = 'logs/' + current_time
 
-    model = UNet()
+    model = ZoomNN()
 
-    loss = tf.keras.losses.BinaryCrossentropy(from_logits=True)
-    metrics = [tf.keras.metrics.BinaryAccuracy(threshold=0)]
+    loss = ignore_m1_bce
+    metrics = [BinaryAccuracyWithIgnore()]
 
     print('Compiling...')
     model.compile(
@@ -23,13 +68,18 @@ if __name__ == '__main__':
         metrics=metrics,
     )
 
-    cb = tf.keras.callbacks.TensorBoard(
+    tensorboard = tf.keras.callbacks.TensorBoard(
         log_dir=log_dir,
         update_freq=1000
     )
 
+    ckpt = tf.keras.callbacks.ModelCheckpoint(
+        filepath=log_dir + '/model.{epoch:02d}.{val_accuracy:03f}.h5',
+    )
+
     print('Training...')
     model.fit(train_data,
+        validation_data=val_data,
         epochs=10,
-        callbacks=[cb]
+        callbacks=[ckpt, tensorboard]
     )

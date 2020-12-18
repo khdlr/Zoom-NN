@@ -1,5 +1,6 @@
 logs/
 data/
+data_np/
 __pycache__/
 .directory
 .ipynb_checkpoints

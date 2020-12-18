@@ -9,7 +9,7 @@ DEFAULTS = dict(
     base_channels=16,
     output_channels=2,
     batch_norm=False,
-    stack_height=6,
+    stack_height=4,
 )
 
 

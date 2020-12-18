@@ -1,6 +1,5 @@
 import numpy as np
 import pandas as pd
-import tensorflow as tf
 
 def get_stack(ncf, names):
     return np.stack([
