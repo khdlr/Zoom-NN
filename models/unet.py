@@ -21,7 +21,9 @@ def UNet(config={}):
     stack_height    = config['stack_height']
 
     x = Input([256, 256, 2])
-    inputs = [x]
+    btemp = Input([32, 32, 14])
+
+    inputs = [x, btemp]
 
     # Initialize feature maps
     x = DoubleConv(x, base_channels, batch_norm)
@@ -33,6 +35,9 @@ def UNet(config={}):
         skip_connections.append(x)
         channels = channels * 2
         x = DownBlock(x, channels, batch_norm=batch_norm)
+        if i == 2:
+            b = layers.Conv2D(channels, 1)(btemp)
+            x = layers.Add()([x, b])
 
     # Build the decoder part
     scale = 1

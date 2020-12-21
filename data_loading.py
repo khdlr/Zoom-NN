@@ -28,7 +28,7 @@ def build_dataset(name, method_name='zoomnn'):
 
     data = tf.data.Dataset.from_tensor_slices(np_files)
     data = data.shuffle(len(np_files))
-    data = data.map(load_tile, num_parallel_calls=None, deterministic=False)
+    data = data.map(load_tile, num_parallel_calls=3, deterministic=False)
     if method_name == 'zoomnn':
         data = data.map(inflate_and_patch_zoomnn, num_parallel_calls=3, deterministic=False)
     elif method_name == 'unet':
@@ -40,8 +40,6 @@ def build_dataset(name, method_name='zoomnn'):
 
     if name == 'train':
         data = data.shuffle(1024 * 8)
-    #     data = data.repeat(64)
-    #     data = data.map(augment)
     data = data.batch(BATCH_SIZE)
     data = data.prefetch(12)
     return data
@@ -55,12 +53,17 @@ def load_tile(tile_path):
 
         sar = npz['nersc_sar']
         btemp = npz['btemp']
-        labels = npz['concentration'][...,[0]]
-        labels = np.where(labels == -1, -1, (labels >= 3).astype(np.int8))
+        labels = npz['concentration'][..., [0]]
+        lbl_float = labels.astype(np.float32)
+        labels = np.where(labels == -1, np.float32(-1),  # Filter missing data
+            np.where(labels < 10, np.float32(0.0),
+            np.where(labels > 90, lbl_float / 20 + 3.6,  # 91 -> .95, 92 -> 1.0
+            lbl_float / 100
+        )))
 
         return sar, btemp, labels, sar.shape, btemp.shape, labels.shape
     sar, btemp, labels, sar_shp, btemp_shp, labels_shp = tf.numpy_function(inner,
-            [tile_path], [tf.float32, tf.float32, tf.int8, tf.int64, tf.int64, tf.int64])
+            [tile_path], [tf.float32, tf.float32, tf.float32, tf.int64, tf.int64, tf.int64])
 
     sar = tf.reshape(sar, (sar_shp[0], sar_shp[1], sar_shp[2]))
     btemp = tf.reshape(btemp, (btemp_shp[0], btemp_shp[1], btemp_shp[2]))
@@ -136,7 +139,7 @@ def tensors_to_dataset(*tensors):
 def filter_nodata(img, lbl):
     s1 = img[0]
     nodata_pct = tf.reduce_mean(tf.cast(tf.math.logical_or(
-            tf.squeeze(tf.math.equal(lbl, tf.constant(-1, tf.int8)), 2),
+            tf.squeeze(tf.math.equal(lbl, tf.constant(-1, tf.float32)), 2),
             tf.reduce_all(tf.equal(s1, tf.constant(0, tf.float32)), axis=-1)
     ), tf.float32))
 
