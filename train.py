@@ -61,8 +61,6 @@ class BinaryAccuracyWithIgnore(tf.keras.metrics.Metric):
         self.total.assign(0)
 
 
-
-
 if __name__ == '__main__':
     model = ZoomNN()
     train_data = data_loading.build_dataset('train', 'zoomnn')
@@ -74,9 +72,9 @@ if __name__ == '__main__':
     # loss = ignore_m1_bce
     loss = ignore_m1_bce
     metrics = [
-        BinaryAccuracyWithIgnore(threshold=0.1, name='acc@0.1'),
-        BinaryAccuracyWithIgnore(threshold=0.3, name='acc@0.3'),
-        BinaryAccuracyWithIgnore(threshold=0.5, name='acc@0.5'),
+        BinaryAccuracyWithIgnore(threshold=0.05, name='acc_at_05'),
+        BinaryAccuracyWithIgnore(threshold=0.09, name='acc_at_09'),
+        BinaryAccuracyWithIgnore(threshold=0.15, name='acc_at_15'),
     ]
 
     print('Compiling...')
@@ -92,7 +90,7 @@ if __name__ == '__main__':
     )
 
     ckpt = tf.keras.callbacks.ModelCheckpoint(
-        filepath=log_dir + '/model.{epoch:02d}.{val_accuracy:03f}.h5',
+        filepath=log_dir + '/model.{epoch:02d}.{val_acc_at_05:03f}.h5',
     )
 
     print('Training...')
