@@ -1,11 +1,6 @@
 import numpy as np
-import skimage.transform
 from pathlib import Path
-import tqdm as tqdm
 import tensorflow as tf
-import h5netcdf
-from itertools import product
-import data_utils
 import hashlib
 
 BATCH_SIZE = 16

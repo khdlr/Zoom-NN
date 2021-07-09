@@ -1,27 +1,20 @@
 import tensorflow as tf
 
-from tensorflow.keras import Model, Input, Sequential, layers
+from tensorflow.keras import Model, Input, layers
 import tensorflow.keras.backend as K
 
 DEFAULTS = dict(
     base_channels=16,
-    output_channels=2,
-    batch_norm=False,
-    stack_height=6,
 )
 
 def ZoomNN(config={}):
     config = {**DEFAULTS, **config}  # config overwrites defaults
     base_channels   = config['base_channels']
-    output_channels = config['output_channels']
-    batch_norm      = config['batch_norm']
-    stack_height    = config['stack_height']
 
     s1 = Input([256, 256, 2], name='input_s1')
     s2 = Input([256, 256, 2], name='input_s2')
     s3 = Input([256, 256, 2], name='input_s3')
     s4 = Input([256, 256, 2+14], name='input_s4')
-    # s5 = Input([256, 256, 2+14], name='input_s5')
 
     C = base_channels
 
@@ -30,30 +23,12 @@ def ZoomNN(config={}):
     l2 = ConvReLU(C, batch_norm=False)(s2)
     l3 = ConvReLU(C, batch_norm=False)(s3)
     l4 = ConvReLU(C, batch_norm=False)(s4)
-    # l5 = ConvReLU(C, batch_norm=False)(s5)
 
     # Initial Dense Blocks
     x1 = ResidualDenseBlock(C)(l1)
     x2 = ResidualDenseBlock(C)(l2)
     x3 = ResidualDenseBlock(C)(l3)
     x4 = ResidualDenseBlock(C)(l4)
-    # x5 = ResidualDenseBlock(C)(l5)
-
-    # "Weaving" stage
-    # x2 = layers.Add()([x2, DownAndPad()(x1)])
-    # x2 = ResidualDenseBlock(C)(x2)
-
-    # x3 = layers.Add()([x3, DownAndPad()(x2)])
-    # x3 = ResidualDenseBlock(C)(x3)
-
-    # x4 = layers.Add()([x4, DownAndPad()(x3)])
-    # x4 = ResidualDenseBlock(C)(x4)
-
-    # x5 = layers.Add()([x5, DownAndPad()(x4)])
-    # x5 = ResidualDenseBlock(C)(x5)
-
-    # x4 = layers.Add()([x4, CropAndUp()(x5)])
-    # x4 = ResidualDenseBlock(C)(x4)
 
     x3 = layers.Add()([x3, CropAndUp()(x4)])
     x3 = ResidualDenseBlock(C)(x3)

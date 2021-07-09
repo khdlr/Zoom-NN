@@ -69,7 +69,6 @@ if __name__ == '__main__':
     current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     log_dir = 'logs/' + current_time
 
-    # loss = ignore_m1_bce
     loss = ignore_m1_bce
     metrics = [
         BinaryAccuracyWithIgnore(threshold=0.05, name='acc_at_05'),
